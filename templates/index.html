@@ -13,10 +13,8 @@
         .user-name { color: #94a3b8; font-size: 14px; }
         .btn-logout { background-color: #ef4444; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: bold; }
         .container { max-width: 900px; margin: 40px auto; padding: 0 20px; width: 100%; }
-        
         .card { background-color: #1e293b; border-radius: 12px; padding: 32px; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.3); margin-bottom: 24px; }
         h2 { color: #38bdf8; margin-bottom: 20px; font-size: 20px; }
-        
         .form-group { margin-bottom: 16px; }
         label { display: block; margin-bottom: 8px; font-size: 14px; color: #94a3b8; }
         input, select { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #334155; background-color: #0f172a; color: #fff; outline: none; font-size: 15px; }
@@ -26,6 +24,13 @@
         .result-box { background-color: #0f172a; border: 1px solid #38bdf8; border-radius: 8px; padding: 20px; margin-top: 24px; }
         .result-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 15px; }
         .result-row.highlight { font-size: 18px; font-weight: bold; color: #38bdf8; border-top: 1px solid #334155; padding-top: 12px; }
+
+        /* Table Styling */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; font-size: 14px; }
+        th { background-color: #0f172a; color: #38bdf8; }
+        tr:hover { background-color: #0f172a; }
+        .badge { background-color: #166534; color: #86efac; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -34,7 +39,7 @@
         <div class="logo">RegioVal</div>
         <div class="user-nav">
             <span class="user-name">Halo, <strong>{{USERNAME}}</strong>!</span>
-            <a href="/login" class="btn-logout">Logout</a>
+            <a href="/logout" class="btn-logout">Logout</a>
         </div>
     </header>
 
@@ -47,8 +52,9 @@
                     <input type="number" step="0.01" id="base_price" name="base_price" value="59.99" required>
                 </div>
                 <div class="form-group">
-                    <label for="currency">Pilih Negara / Mata Uang Tujuan:</label>
+                    <label for="currency">Pilih Negara / Target:</label>
                     <select id="currency" name="currency">
+                        <option value="ALL">Semua Negara (Tabel Perbandingan)</option>
                         <option value="IDR">Indonesia (Rupiah - IDR)</option>
                         <option value="BRL">Brazil (Real - BRL)</option>
                         <option value="ARG">Argentina (Peso - ARG)</option>
@@ -58,7 +64,6 @@
                 <button type="submit">Hitung Rekomendasi Harga</button>
             </form>
 
-            <!-- Menampilkan hasil kalkulasi jika ada -->
             {{RESULT_SECTION}}
         </div>
     </div>

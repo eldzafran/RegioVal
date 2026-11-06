@@ -1,8 +1,13 @@
 import sqlite3
 import urllib.parse
 import hashlib
+import uuid
+from http.cookies import SimpleCookie
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import pricing_engine  # Impor modul kalkulasi baru
+import pricing_engine
+
+# Simpan session aktif di memori (session_id -> username)
+SESSIONS = {}
 
 def init_db():
     conn = sqlite3.connect('database.db')
@@ -22,12 +27,21 @@ def hash_password(password):
 
 class RegioValHandler(BaseHTTPRequestHandler):
 
+    def get_session_user(self):
+        cookie_header = self.headers.get('Cookie')
+        if cookie_header:
+            cookie = SimpleCookie(cookie_header)
+            if 'session_id' in cookie:
+                session_id = cookie['session_id'].value
+                return SESSIONS.get(session_id)
+        return None
+
     def read_post_data(self):
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length).decode('utf-8')
         return urllib.parse.parse_qs(post_data)
 
-    def render_template(self, filename, status_code=200, error_msg="", success_msg="", username="Developer", result_html=""):
+    def render_template(self, filename, status_code=200, error_msg="", success_msg="", username="Guest", result_html=""):
         try:
             with open(f'templates/{filename}', 'r', encoding='utf-8') as file:
                 content = file.read()
@@ -50,10 +64,38 @@ class RegioValHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Template Not Found")
 
     def do_GET(self):
+        current_user = self.get_session_user()
+
+        # Proteksi Halaman Dashboard
         if self.path == '/' or self.path == '/index':
-            self.render_template('index.html')
+            if not current_user:
+                self.send_response(303)
+                self.send_header('Location', '/login')
+                self.end_headers()
+                return
+            self.render_template('index.html', username=current_user)
+
+        elif self.path == '/logout':
+            cookie_header = self.headers.get('Cookie')
+            if cookie_header:
+                cookie = SimpleCookie(cookie_header)
+                if 'session_id' in cookie:
+                    session_id = cookie['session_id'].value
+                    SESSIONS.pop(session_id, None)
+
+            self.send_response(303)
+            self.send_header('Set-Cookie', 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/')
+            self.send_header('Location', '/login')
+            self.end_headers()
+
         elif self.path == '/login':
+            if current_user:
+                self.send_response(303)
+                self.send_header('Location', '/')
+                self.end_headers()
+                return
             self.render_template('login.html')
+
         elif self.path == '/register':
             self.render_template('register.html')
         else:
@@ -61,15 +103,51 @@ class RegioValHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         params = self.read_post_data()
+        current_user = self.get_session_user()
 
         if self.path == '/calculate':
+            if not current_user:
+                self.send_response(303)
+                self.send_header('Location', '/login')
+                self.end_headers()
+                return
+
             try:
                 base_price = float(params.get('base_price', [0])[0])
-                currency = params.get('currency', ['IDR'])[0]
+                currency = params.get('currency', ['ALL'])[0]
 
-                res = pricing_engine.calculate_regional_price(base_price, currency)
-                
-                if res:
+                if currency == 'ALL':
+                    results = pricing_engine.calculate_all_regional_prices(base_price)
+                    rows = ""
+                    for res in results:
+                        rows += f'''
+                        <tr>
+                            <td><strong>{res['country_name']}</strong> ({res['currency']})</td>
+                            <td>{res['symbol']} {res['raw_converted']:,}</td>
+                            <td><span class="badge">-{res['discount_vs_raw_percent']}%</span></td>
+                            <td><strong>{res['symbol']} {res['recommended_price']:,}</strong></td>
+                        </tr>
+                        '''
+                    result_html = f'''
+                    <div class="result-box">
+                        <h3 style="color:#38bdf8; margin-bottom:12px;">Hasil Perbandingan Semua Negara (Base: ${base_price})</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Negara / Mata Uang</th>
+                                    <th>Konversi Mentah</th>
+                                    <th>Diskon PPP</th>
+                                    <th>Rekomendasi RegioVal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows}
+                            </tbody>
+                        </table>
+                    </div>
+                    '''
+                else:
+                    res = pricing_engine.calculate_regional_price(base_price, currency)
                     result_html = f'''
                     <div class="result-box">
                         <div class="result-row">
@@ -86,16 +164,14 @@ class RegioValHandler(BaseHTTPRequestHandler):
                         </div>
                     </div>
                     '''
-                else:
-                    result_html = '<div class="alert alert-error">Mata uang tidak ditemukan.</div>'
-                
-                self.render_template('index.html', result_html=result_html)
+                self.render_template('index.html', username=current_user, result_html=result_html)
             except ValueError:
-                self.render_template('index.html', error_msg="Input harga tidak valid.")
+                self.render_template('index.html', username=current_user, error_msg="Input harga tidak valid.")
 
         elif self.path == '/register':
             username = params.get('username', [''])[0].strip()
             password = params.get('password', [''])[0].strip()
+
             if not username or not password:
                 self.render_template('register.html', status_code=400, error_msg="Username dan password wajib diisi!")
                 return
@@ -109,14 +185,11 @@ class RegioValHandler(BaseHTTPRequestHandler):
                 conn.close()
                 self.render_template('login.html', success_msg="Registrasi berhasil! Silakan masuk.")
             except sqlite3.IntegrityError:
-                self.render_template('register.html', status_code=400, error_msg="Username sudah terdaftar. Gunakan username lain!")
+                self.render_template('register.html', status_code=400, error_msg="Username sudah terdaftar!")
 
         elif self.path == '/login':
             username = params.get('username', [''])[0].strip()
             password = params.get('password', [''])[0].strip()
-            if not username or not password:
-                self.render_template('login.html', status_code=400, error_msg="Username dan password wajib diisi!")
-                return
 
             hashed_pwd = hash_password(password)
             conn = sqlite3.connect('database.db')
@@ -126,11 +199,15 @@ class RegioValHandler(BaseHTTPRequestHandler):
             conn.close()
 
             if user:
+                session_id = str(uuid.uuid4())
+                SESSIONS[session_id] = username
+
                 self.send_response(303)
+                self.send_header('Set-Cookie', f'session_id={session_id}; Path=/; HttpOnly')
                 self.send_header('Location', '/')
                 self.end_headers()
             else:
-                self.render_template('login.html', status_code=401, error_msg="Username atau password yang Anda masukkan salah!")
+                self.render_template('login.html', status_code=401, error_msg="Username atau password salah!")
 
 if __name__ == '__main__':
     init_db()
