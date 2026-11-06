@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RegioVal - Dashboard</title>
+    <title>RegioVal - Analytics & Dashboard</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #0f172a; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; }
@@ -12,24 +12,23 @@
         .user-nav { display: flex; align-items: center; gap: 16px; }
         .user-name { color: #94a3b8; font-size: 14px; }
         .btn-logout { background-color: #ef4444; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: bold; }
-        .container { max-width: 900px; margin: 40px auto; padding: 0 20px; width: 100%; }
-        .card { background-color: #1e293b; border-radius: 12px; padding: 32px; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.3); margin-bottom: 24px; }
-        h2 { color: #38bdf8; margin-bottom: 20px; font-size: 20px; }
+        .container { max-width: 950px; margin: 30px auto; padding: 0 20px; width: 100%; }
+        
+        .card { background-color: #1e293b; border-radius: 12px; padding: 28px; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.3); margin-bottom: 24px; }
+        h2 { color: #38bdf8; margin-bottom: 16px; font-size: 18px; }
+        
         .form-group { margin-bottom: 16px; }
         label { display: block; margin-bottom: 8px; font-size: 14px; color: #94a3b8; }
         input, select { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #334155; background-color: #0f172a; color: #fff; outline: none; font-size: 15px; }
         button { width: 100%; padding: 12px; border-radius: 6px; border: none; background-color: #0284c7; color: white; font-weight: bold; cursor: pointer; font-size: 15px; transition: 0.2s; }
         button:hover { background-color: #0369a1; }
         
-        .result-box { background-color: #0f172a; border: 1px solid #38bdf8; border-radius: 8px; padding: 20px; margin-top: 24px; }
-        .result-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 15px; }
-        .result-row.highlight { font-size: 18px; font-weight: bold; color: #38bdf8; border-top: 1px solid #334155; padding-top: 12px; }
-
         table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; font-size: 14px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #334155; font-size: 13px; }
         th { background-color: #0f172a; color: #38bdf8; }
         tr:hover { background-color: #0f172a; }
-        .badge { background-color: #166534; color: #86efac; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .badge { background-color: #166534; color: #86efac; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+        .result-box { background-color: #0f172a; border: 1px solid #38bdf8; border-radius: 8px; padding: 20px; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -43,9 +42,37 @@
     </header>
 
     <div class="container">
-        <!-- Main Form Card -->
+        <!-- Visual Diagram Card -->
         <div class="card">
-            <h2>Kalkulator Pricing Engine Regional (Live API)</h2>
+            <h2>Visualisasi Indikator PPP & Diskon Pricing</h2>
+            {{SVG_CHART}}
+        </div>
+
+        <!-- Economic Data Table Card -->
+        <div class="card">
+            <h2>Tabel Indikator Ekonomi & Daya Beli (World Bank)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Negara</th>
+                        <th>GDP Nominal/Kapita</th>
+                        <th>GDP PPP/Kapita</th>
+                        <th>PPP Factor</th>
+                        <th>Inflasi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Indonesia (IDR)</strong></td><td>$5,060</td><td>$17,720</td><td><span class="badge">0.38</span></td><td>2.5%</td></tr>
+                    <tr><td><strong>Brazil (BRL)</strong></td><td>$9,030</td><td>$23,360</td><td><span class="badge">0.45</span></td><td>4.0%</td></tr>
+                    <tr><td><strong>Argentina (ARG)</strong></td><td>$13,500</td><td>$31,500</td><td><span class="badge">0.30</span></td><td>15.0%</td></tr>
+                    <tr><td><strong>Eurozone (EUR)</strong></td><td>$45,000</td><td>$62,960</td><td><span class="badge">0.95</span></td><td>2.0%</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Calculator Form Card -->
+        <div class="card">
+            <h2>Kalkulator Regional Pricing Engine</h2>
             <form method="POST" action="/calculate">
                 <div class="form-group">
                     <label for="base_price">Harga Base Game (USD $):</label>
@@ -63,7 +90,6 @@
                 </div>
                 <button type="submit">Hitung Rekomendasi Harga</button>
             </form>
-
             {{RESULT_SECTION}}
         </div>
 

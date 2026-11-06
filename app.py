@@ -2,17 +2,19 @@ import sqlite3
 import urllib.parse
 import hashlib
 import uuid
-import datetime
 from http.cookies import SimpleCookie
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import pricing_engine
 
+# Penyimpanan Session Aktif di Memori Server (session_id -> username)
 SESSIONS = {}
 
+# --- 1. Database Management ---
 def init_db():
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
-    # Tabel Users
+    
+    # Tabel Pengguna (Users)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,7 +22,8 @@ def init_db():
             password TEXT NOT NULL
         )
     ''')
-    # Tabel Histori Kalkulasi
+    
+    # Tabel Riwayat Kalkulasi (Calculation History)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS calculation_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,9 +63,11 @@ def get_user_history(username):
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+# --- 2. Request Handler Server ---
 class RegioValHandler(BaseHTTPRequestHandler):
 
     def get_session_user(self):
+        """Memeriksa cookie request untuk validasi status login pengguna"""
         cookie_header = self.headers.get('Cookie')
         if cookie_header:
             cookie = SimpleCookie(cookie_header)
@@ -72,25 +77,33 @@ class RegioValHandler(BaseHTTPRequestHandler):
         return None
 
     def read_post_data(self):
+        """Membaca dan mem-parsing parameter form data dari request POST"""
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length).decode('utf-8')
         return urllib.parse.parse_qs(post_data)
 
     def render_template(self, filename, status_code=200, error_msg="", success_msg="", username="Guest", result_html="", history_html=""):
+        """Menggabungkan template HTML dengan placeholder data dinamis"""
         try:
             with open(f'templates/{filename}', 'r', encoding='utf-8') as file:
                 content = file.read()
 
+            # Notifikasi Alert
             alert_html = ""
             if error_msg:
                 alert_html = f'<div class="alert alert-error">{error_msg}</div>'
             elif success_msg:
                 alert_html = f'<div class="alert alert-success">{success_msg}</div>'
 
+            # Render Diagram SVG dari Pricing Engine
+            svg_chart = pricing_engine.generate_svg_chart()
+
+            # Replacing Placeholders
             content = content.replace('{{MESSAGE}}', alert_html)
             content = content.replace('{{USERNAME}}', username)
             content = content.replace('{{RESULT_SECTION}}', result_html)
             content = content.replace('{{HISTORY_SECTION}}', history_html)
+            content = content.replace('{{SVG_CHART}}', svg_chart)
 
             self.send_response(status_code)
             self.send_header('Content-type', 'text/html; charset=utf-8')
@@ -100,6 +113,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Template Not Found")
 
     def build_history_html(self, username):
+        """Menyusun tabel HTML untuk riwayat kalkulasi pengguna"""
         history = get_user_history(username)
         if not history:
             return '<p style="color:#64748b; font-size:14px;">Belum ada riwayat kalkulasi.</p>'
@@ -128,9 +142,11 @@ class RegioValHandler(BaseHTTPRequestHandler):
         </table>
         '''
 
+    # --- HTTP GET Handler ---
     def do_GET(self):
         current_user = self.get_session_user()
 
+        # Proteksi Rute Dashboard Utama
         if self.path == '/' or self.path == '/index':
             if not current_user:
                 self.send_response(303)
@@ -149,6 +165,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
                     session_id = cookie['session_id'].value
                     SESSIONS.pop(session_id, None)
 
+            # Hapus Cookie dan Redirect ke Login
             self.send_response(303)
             self.send_header('Set-Cookie', 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/')
             self.send_header('Location', '/login')
@@ -167,10 +184,12 @@ class RegioValHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404, "Page Not Found")
 
+    # --- HTTP POST Handler ---
     def do_POST(self):
         params = self.read_post_data()
         current_user = self.get_session_user()
 
+        # Action: Kalkulator Harga
         if self.path == '/calculate':
             if not current_user:
                 self.send_response(303)
@@ -237,6 +256,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
                 history_html = self.build_history_html(current_user)
                 self.render_template('index.html', username=current_user, error_msg="Input harga tidak valid.", history_html=history_html)
 
+        # Action: Register Akun Baru
         elif self.path == '/register':
             username = params.get('username', [''])[0].strip()
             password = params.get('password', [''])[0].strip()
@@ -256,6 +276,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
             except sqlite3.IntegrityError:
                 self.render_template('register.html', status_code=400, error_msg="Username sudah terdaftar!")
 
+        # Action: Login Pengguna
         elif self.path == '/login':
             username = params.get('username', [''])[0].strip()
             password = params.get('password', [''])[0].strip()
@@ -278,6 +299,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
             else:
                 self.render_template('login.html', status_code=401, error_msg="Username atau password salah!")
 
+# --- 3. Run Server Entrypoint ---
 if __name__ == '__main__':
     init_db()
     server_address = ('', 8000)
