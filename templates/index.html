@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RegioVal - Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0f172a; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; }
+        
+        /* Navigation Header */
+        header { background-color: #1e293b; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+        .logo { font-size: 22px; font-weight: bold; color: #38bdf8; letter-spacing: 0.5px; }
+        .user-nav { display: flex; align-items: center; gap: 16px; }
+        .user-name { color: #94a3b8; font-size: 14px; }
+        .btn-logout { background-color: #ef4444; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: bold; transition: 0.2s; }
+        .btn-logout:hover { background-color: #dc2626; }
+
+        /* Main Container */
+        .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; width: 100%; }
+        
+        /* Hero Banner */
+        .hero { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid #334155; border-radius: 12px; padding: 32px; margin-bottom: 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .hero h1 { font-size: 28px; color: #f8fafc; margin-bottom: 8px; }
+        .hero h1 span { color: #38bdf8; }
+        .hero p { color: #94a3b8; font-size: 15px; line-height: 1.6; }
+
+        /* Dashboard Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .card { background-color: #1e293b; border-radius: 10px; padding: 24px; border: 1px solid #334155; transition: transform 0.2s, border-color 0.2s; }
+        .card:hover { transform: translateY(-4px); border-color: #38bdf8; }
+        .card h3 { font-size: 18px; color: #38bdf8; margin-bottom: 12px; }
+        .card p { color: #94a3b8; font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
+        
+        .btn-action { display: inline-block; width: 100%; text-align: center; padding: 10px 0; background-color: #0284c7; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; transition: 0.2s; }
+        .btn-action:hover { background-color: #0369a1; }
+        .btn-disabled { background-color: #334155; color: #64748b; cursor: not-allowed; }
+        .btn-disabled:hover { background-color: #334155; }
+    </style>
+</head>
+<body>
+
+    <!-- Header / Navbar -->
+    <header>
+        <div class="logo">RegioVal</div>
+        <div class="user-nav">
+            <span class="user-name">Halo, <strong>{{USERNAME}}</strong>!</span>
+            <a href="/login" class="btn-logout">Logout</a>
+        </div>
+    </header>
+
+    <!-- Content -->
+    <div class="container">
+        <!-- Hero Welcome -->
+        <div class="hero">
+            <h1>Selamat Datang di <span>RegioVal Engine</span></h1>
+            <p>Sistem penetapan harga regional dinamis berbasis Purchasing Power Parity (PPP), tingkat inflasi, dan nilai tukar mata uang real-time.</p>
+        </div>
+
+        <!-- Modules Grid -->
+        <div class="grid">
+            <div class="card">
+                <h3>Pricing Calculation Engine</h3>
+                <p>Hitung rekomendasi harga game regional berdasarkan Purchasing Power Parity (PPP) dan inflasi negara tujuan.</p>
+                <a href="#" class="btn-action btn-disabled">Segera Hadir</a>
+            </div>
+
+            <div class="card">
+                <h3>Steam & World Bank Data</h3>
+                <p>Kelola dan sinkronkan data nilai tukar mata uang serta indikator ekonomi dari World Bank API.</p>
+                <a href="#" class="btn-action btn-disabled">Segera Hadir</a>
+            </div>
+
+            <div class="card">
+                <h3>Pengaturan Akun</h3>
+                <p>Kelola kredensial akun pengguna, perbarui password, dan konfigurasi profil sistem.</p>
+                <a href="#" class="btn-action btn-disabled">Segera Hadir</a>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
