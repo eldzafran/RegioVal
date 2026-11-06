@@ -2,16 +2,17 @@ import sqlite3
 import urllib.parse
 import hashlib
 import uuid
+import datetime
 from http.cookies import SimpleCookie
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import pricing_engine
 
-# Simpan session aktif di memori (session_id -> username)
 SESSIONS = {}
 
 def init_db():
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
+    # Tabel Users
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,8 +20,42 @@ def init_db():
             password TEXT NOT NULL
         )
     ''')
+    # Tabel Histori Kalkulasi
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS calculation_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            base_price REAL NOT NULL,
+            target_currency TEXT NOT NULL,
+            recommended_price REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     conn.commit()
     conn.close()
+
+def save_history(username, base_price, target_currency, recommended_price):
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO calculation_history (username, base_price, target_currency, recommended_price)
+        VALUES (?, ?, ?, ?)
+    ''', (username, base_price, target_currency, recommended_price))
+    conn.commit()
+    conn.close()
+
+def get_user_history(username):
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT base_price, target_currency, recommended_price, created_at 
+        FROM calculation_history 
+        WHERE username = ? 
+        ORDER BY id DESC LIMIT 5
+    ''', (username,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -41,7 +76,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length).decode('utf-8')
         return urllib.parse.parse_qs(post_data)
 
-    def render_template(self, filename, status_code=200, error_msg="", success_msg="", username="Guest", result_html=""):
+    def render_template(self, filename, status_code=200, error_msg="", success_msg="", username="Guest", result_html="", history_html=""):
         try:
             with open(f'templates/{filename}', 'r', encoding='utf-8') as file:
                 content = file.read()
@@ -55,6 +90,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
             content = content.replace('{{MESSAGE}}', alert_html)
             content = content.replace('{{USERNAME}}', username)
             content = content.replace('{{RESULT_SECTION}}', result_html)
+            content = content.replace('{{HISTORY_SECTION}}', history_html)
 
             self.send_response(status_code)
             self.send_header('Content-type', 'text/html; charset=utf-8')
@@ -63,17 +99,47 @@ class RegioValHandler(BaseHTTPRequestHandler):
         except FileNotFoundError:
             self.send_error(404, "Template Not Found")
 
+    def build_history_html(self, username):
+        history = get_user_history(username)
+        if not history:
+            return '<p style="color:#64748b; font-size:14px;">Belum ada riwayat kalkulasi.</p>'
+        
+        rows = ""
+        for item in history:
+            rows += f'''
+            <tr>
+                <td>${item[0]}</td>
+                <td>{item[1]}</td>
+                <td>{item[2]:,}</td>
+                <td>{item[3]}</td>
+            </tr>
+            '''
+        return f'''
+        <table>
+            <thead>
+                <tr>
+                    <th>Base Price</th>
+                    <th>Target</th>
+                    <th>Hasil Rekomendasi</th>
+                    <th>Waktu</th>
+                </tr>
+            </thead>
+            <tbody>{rows}</tbody>
+        </table>
+        '''
+
     def do_GET(self):
         current_user = self.get_session_user()
 
-        # Proteksi Halaman Dashboard
         if self.path == '/' or self.path == '/index':
             if not current_user:
                 self.send_response(303)
                 self.send_header('Location', '/login')
                 self.end_headers()
                 return
-            self.render_template('index.html', username=current_user)
+            
+            history_html = self.build_history_html(current_user)
+            self.render_template('index.html', username=current_user, history_html=history_html)
 
         elif self.path == '/logout':
             cookie_header = self.headers.get('Cookie')
@@ -120,6 +186,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
                     results = pricing_engine.calculate_all_regional_prices(base_price)
                     rows = ""
                     for res in results:
+                        save_history(current_user, base_price, res['currency'], res['recommended_price'])
                         rows += f'''
                         <tr>
                             <td><strong>{res['country_name']}</strong> ({res['currency']})</td>
@@ -130,7 +197,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
                         '''
                     result_html = f'''
                     <div class="result-box">
-                        <h3 style="color:#38bdf8; margin-bottom:12px;">Hasil Perbandingan Semua Negara (Base: ${base_price})</h3>
+                        <h3 style="color:#38bdf8; margin-bottom:12px;">Hasil Live API Perbandingan (Base: ${base_price})</h3>
                         <table>
                             <thead>
                                 <tr>
@@ -140,14 +207,13 @@ class RegioValHandler(BaseHTTPRequestHandler):
                                     <th>Rekomendasi RegioVal</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {rows}
-                            </tbody>
+                            <tbody>{rows}</tbody>
                         </table>
                     </div>
                     '''
                 else:
                     res = pricing_engine.calculate_regional_price(base_price, currency)
+                    save_history(current_user, base_price, res['currency'], res['recommended_price'])
                     result_html = f'''
                     <div class="result-box">
                         <div class="result-row">
@@ -164,9 +230,12 @@ class RegioValHandler(BaseHTTPRequestHandler):
                         </div>
                     </div>
                     '''
-                self.render_template('index.html', username=current_user, result_html=result_html)
+
+                history_html = self.build_history_html(current_user)
+                self.render_template('index.html', username=current_user, result_html=result_html, history_html=history_html)
             except ValueError:
-                self.render_template('index.html', username=current_user, error_msg="Input harga tidak valid.")
+                history_html = self.build_history_html(current_user)
+                self.render_template('index.html', username=current_user, error_msg="Input harga tidak valid.", history_html=history_html)
 
         elif self.path == '/register':
             username = params.get('username', [''])[0].strip()
