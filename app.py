@@ -27,7 +27,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length).decode('utf-8')
         return urllib.parse.parse_qs(post_data)
 
-    def render_template(self, filename, status_code=200, error_msg="", success_msg="", username="Developer", result_html=""):
+    def render_template(self, filename, status_code=200, error_msg="", success_msg="", username="Developer", result_html="", selected_currency="IDR"):
         try:
             with open(f'templates/{filename}', 'r', encoding='utf-8') as file:
                 content = file.read()
@@ -37,6 +37,12 @@ class RegioValHandler(BaseHTTPRequestHandler):
                 alert_html = f'<div class="alert alert-error">{error_msg}</div>'
             elif success_msg:
                 alert_html = f'<div class="alert alert-success">{success_msg}</div>'
+
+            options_html = ""
+            for code, info in pricing_engine.ECONOMIC_DATA.items():
+                selected = "selected" if code == selected_currency else ""
+                options_html += f'<option value="{code}" {selected}>{info["name"]} - {code}</option>\n'
+            content = content.replace('{{CURRENCY_OPTIONS}}', options_html)
 
             content = content.replace('{{MESSAGE}}', alert_html)
             content = content.replace('{{USERNAME}}', username)
@@ -89,7 +95,7 @@ class RegioValHandler(BaseHTTPRequestHandler):
                 else:
                     result_html = '<div class="alert alert-error">Mata uang tidak ditemukan.</div>'
                 
-                self.render_template('index.html', result_html=result_html)
+                self.render_template('index.html', result_html=result_html, selected_currency=currency)
             except ValueError:
                 self.render_template('index.html', error_msg="Input harga tidak valid.")
 
