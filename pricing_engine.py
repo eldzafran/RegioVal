@@ -1,60 +1,80 @@
 # pricing_engine.py
-# RegioVal - Dynamic Regional Pricing Engine Core Logic
+# RegioVal - Dynamic Regional Pricing Engine & Economic Visualizer
 
-# Data indikator ekonomi (Simulasi/Mock data dari World Bank & IMF)
-# Base reference: USD = 1.00
+import urllib.request
+import json
+
+# Data Indikator Ekonomi Berdasarkan World Bank & IMF
 ECONOMIC_DATA = {
     'IDR': {
         'name': 'Indonesia (Rupiah)',
         'symbol': 'Rp',
-        'exchange_rate': 15700.0,  # 1 USD = 15,700 IDR
-        'ppp_factor': 0.38,         # Daya beli relatif ~38% dari AS
-        'inflation_rate': 0.025     # Inflasi 2.5%
+        'gdp_nominal': 5060,
+        'gdp_ppp': 17720,
+        'ppp_factor': 0.38,
+        'inflation_rate': 0.025
     },
     'BRL': {
         'name': 'Brazil (Real)',
         'symbol': 'R$',
-        'exchange_rate': 5.0,
+        'gdp_nominal': 9030,
+        'gdp_ppp': 23360,
         'ppp_factor': 0.45,
-        'inflation_rate': 0.04
+        'inflation_rate': 0.040
     },
     'ARG': {
         'name': 'Argentina (Peso)',
         'symbol': '$',
-        'exchange_rate': 950.0,
+        'gdp_nominal': 13500,
+        'gdp_ppp': 31500,
         'ppp_factor': 0.30,
-        'inflation_rate': 0.15      # Penyesuaian inflasi tinggi
+        'inflation_rate': 0.150
     },
     'EUR': {
         'name': 'Eurozone (Euro)',
         'symbol': '€',
-        'exchange_rate': 0.92,
+        'gdp_nominal': 45000,
+        'gdp_ppp': 62960,
         'ppp_factor': 0.95,
-        'inflation_rate': 0.02
+        'inflation_rate': 0.020
     }
 }
 
-def calculate_regional_price(base_price_usd, target_currency):
-    """
-    Menghitung rekomendasi harga regional berbasis PPP dan inflasi.
-    """
+FALLBACK_RATES = {
+    'IDR': 15700.0,
+    'BRL': 5.0,
+    'ARG': 950.0,
+    'EUR': 0.92
+}
+
+def fetch_live_exchange_rates():
+    """Penarikan data kurs real-time via API open.er-api.com"""
+    url = "https://open.er-api.com/v6/latest/USD"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=3) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            if data.get('result') == 'success':
+                return data.get('rates', FALLBACK_RATES)
+    except Exception as e:
+        print(f"[Warning] Gagal penarikan API: {e}. Menggunakan Fallback Rate.")
+    return FALLBACK_RATES
+
+def calculate_regional_price(base_price_usd, target_currency, rates=None):
     if target_currency not in ECONOMIC_DATA:
         return None
 
+    if rates is None:
+        rates = fetch_live_exchange_rates()
+
+    exchange_rate = rates.get(target_currency, FALLBACK_RATES.get(target_currency, 1.0))
     data = ECONOMIC_DATA[target_currency]
-    
-    # 1. Direct Conversion (Harga mentah tanpa penyesuaian daya beli)
-    raw_converted_price = base_price_usd * data['exchange_rate']
-    
-    # 2. Formula RegioVal: Penyesuaian PPP & Inflasi
-    # Mengalikan dengan ppp_factor agar harga sesuai daya beli lokal,
-    # lalu disesuaikan sedikit dengan tingkat inflasi.
+
+    raw_converted_price = base_price_usd * exchange_rate
     adjusted_ppp = data['ppp_factor'] * (1 + (data['inflation_rate'] / 2))
     recommended_price = raw_converted_price * adjusted_ppp
 
-    # 3. Pembulatan psikologis harga lokal (misal diakhiri dengan .000 atau .99)
     if target_currency == 'IDR':
-        # Pembulatan ke ribuan terdekat (contoh: 249,000)
         final_price = round(recommended_price, -3)
     else:
         final_price = round(recommended_price, 2)
@@ -64,16 +84,46 @@ def calculate_regional_price(base_price_usd, target_currency):
         'country_name': data['name'],
         'symbol': data['symbol'],
         'base_usd': base_price_usd,
+        'exchange_rate': exchange_rate,
+        'gdp_nominal': data['gdp_nominal'],
+        'gdp_ppp': data['gdp_ppp'],
         'raw_converted': round(raw_converted_price, 2),
         'recommended_price': final_price,
         'discount_vs_raw_percent': round((1 - (recommended_price / raw_converted_price)) * 100, 1)
     }
 
-# Quick Test jika file dijalankan langsung
-if __name__ == '__main__':
-    res = calculate_regional_price(60.0, 'IDR')
-    print("--- Testing Engine RegioVal ---")
-    print(f"Base Price (USD): ${res['base_usd']}")
-    print(f"Harga Konversi Mentah (IDR): {res['symbol']} {res['raw_converted']:,}")
-    print(f"Rekomendasi Harga RegioVal (IDR): {res['symbol']} {res['recommended_price']:,}")
-    print(f"Penyesuaian Daya Beli: {res['discount_vs_raw_percent']}% lebih terjangkau dari konversi mentah.")
+def calculate_all_regional_prices(base_price_usd):
+    rates = fetch_live_exchange_rates()
+    results = []
+    for currency in ECONOMIC_DATA:
+        res = calculate_regional_price(base_price_usd, currency, rates)
+        if res:
+            results.append(res)
+    return results
+
+def generate_svg_chart(base_price_usd=59.99):
+    """Menghasilkan Diagram Batang Visual dalam format SVG"""
+    results = calculate_all_regional_prices(base_price_usd)
+    
+    svg = f'''
+    <svg width="100%" height="260" viewBox="0 0 600 260" xmlns="http://www.w3.org/2000/svg" style="background:#0f172a; border-radius:8px; padding:10px;">
+        <text x="20" y="30" fill="#38bdf8" font-size="16" font-family="sans-serif" font-weight="bold">Diagram Perbandingan PPP Factor & Diskon Regional (Base: ${base_price_usd})</text>
+    '''
+    
+    y = 60
+    for res in results:
+        ppp_pct = res['discount_vs_raw_percent']
+        bar_width = int((100 - ppp_pct) * 3.5)  # Scale width
+        
+        svg += f'''
+        <g transform="translate(0, {y})">
+            <text x="20" y="18" fill="#f8fafc" font-size="13" font-family="sans-serif">{res['country_name']} ({res['currency']})</text>
+            <rect x="220" y="4" width="350" height="20" rx="4" fill="#334155" />
+            <rect x="220" y="4" width="{bar_width}" height="20" rx="4" fill="#0284c7" />
+            <text x="{230 + bar_width}" y="19" fill="#38bdf8" font-size="12" font-family="sans-serif" font-weight="bold">Diskon: -{ppp_pct}%</text>
+        </g>
+        '''
+        y += 45
+
+    svg += '</svg>'
+    return svg
